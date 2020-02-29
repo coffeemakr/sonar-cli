@@ -22,13 +22,14 @@ def has_sha1sum(filename, sha1sum):
 
 
 class Link:
-    def __init__(self, filename, sha1sum, gated, free_link=None):
+    def __init__(self, filename, sha1sum, gated,  study_id, free_link=None):
         self.filename = filename
         self.sha1sum = sha1sum
         self.gated = gated
         self.free_link = free_link
+        self.study_id = study_id
 
-def parse_links_from_html(html, download_base):
+def parse_links_from_html(html, download_base, study_id):
     for tbody in html.find_all('tbody'):
         for row in tbody.find_all("tr"):
             sha1sum = row.find(class_='sha').string.strip()
@@ -36,10 +37,10 @@ def parse_links_from_html(html, download_base):
                 link = row.find("a")
                 filename = row.td.string.strip()
                 link = download_base + filename
-                yield Link(filename=filename, sha1sum=sha1sum, gated=False, free_link=link)
+                yield Link(filename=filename, sha1sum=sha1sum, gated=False, free_link=link, study_id=study_id)
             else:
                 filename = row.find(class_='filename').string.strip()
-                yield Link(filename=filename, sha1sum=sha1sum, gated=True)
+                yield Link(filename=filename, sha1sum=sha1sum, gated=True, study_id=study_id)
 
 
 
@@ -62,7 +63,7 @@ def get_links(study_id):
         with open(cache_file, 'w') as cache:
             cache.write(r.text)
         html = BeautifulSoup(r.text, "html.parser")
-    return parse_links_from_html(html, url)
+    return parse_links_from_html(html, url, study_id)
 
 @cli.command()
 @click.argument('study_id', default=False)
@@ -107,6 +108,7 @@ def download_file_to_file(download_url, fp):
 
 @cli.command()
 @click.argument('study_id', default=False)
+@click.option('--continue', default=False, help='Continue incomplete files')
 def download(study_id):
     for link in get_links(study_id):
         if link.gated:
@@ -120,7 +122,6 @@ def download(study_id):
                 print(f"skipping existing file {local_path}")
                 continue
         
-        sha1sum = link.sha1sum
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, 'wb') as outfile:
             download_file_to_file(link.free_link, outfile)
